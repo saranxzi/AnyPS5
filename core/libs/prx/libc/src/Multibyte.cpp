@@ -138,4 +138,39 @@ std::size_t APS5_VABI mbsrtowcs_nid_postfix(std::uint16_t* destination, const ch
     return converted;
 }
 
+std::size_t APS5_VABI wcsrtombs_nid_postfix(
+    char* destination, const std::uint16_t** source, std::size_t count, void*
+) {
+    if (!source || !*source) return 0;
+    const auto* wide = *source;
+    if (!destination) {
+        std::size_t total = 0;
+        for (; *wide != 0; ++wide) {
+            if (*wide > 255) {
+                errno = 86;
+                return static_cast<std::size_t>(-1);
+            }
+            ++total;
+        }
+        return total;
+    }
+    std::size_t written = 0;
+    while (written < count) {
+        if (*wide > 255) {
+            *source = wide;
+            errno = 86;
+            return static_cast<std::size_t>(-1);
+        }
+        destination[written] = static_cast<char>(*wide);
+        if (*wide == 0) {
+            *source = nullptr;
+            return written;
+        }
+        ++written;
+        ++wide;
+    }
+    *source = wide;
+    return written;
+}
+
 }

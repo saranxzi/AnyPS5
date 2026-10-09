@@ -1,10 +1,15 @@
 #include "prx/libc/include/general/VabiMacros.hpp"
+#include <cerrno>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 
-extern "C" int APS5_VABI wcsrtombs_s_nid_postfix(
+extern "C" {
+int APS5_VABI wcsrtombs_s_nid_postfix(
     std::size_t*, char*, std::size_t, const std::uint16_t**, std::size_t, void*);
+std::size_t APS5_VABI wcsrtombs_nid_postfix(
+    char*, const std::uint16_t**, std::size_t, void*);
+}
 static void Require(bool value) { if (!value) std::abort(); }
 
 constexpr auto Failed = static_cast<std::size_t>(-1);
@@ -75,4 +80,38 @@ int main() {
     result = 7;
     Require(wcsrtombs_s_nid_postfix(&result, out, 4, &source, 4, nullptr) == 22 && result == Failed && out[0] == '\0');
     Require(source == text && std::memcmp(out, "\0xxx", 4) == 0);
+
+    const std::uint16_t* ptr = text;
+    Require(wcsrtombs_nid_postfix(nullptr, &ptr, 0, nullptr) == 3 && ptr == text);
+
+    char outMbs[8];
+    std::memset(outMbs, 'x', sizeof(outMbs));
+    ptr = text;
+    Require(wcsrtombs_nid_postfix(outMbs, &ptr, 8, nullptr) == 3);
+    Require(ptr == nullptr && std::memcmp(outMbs, "abc\0x", 5) == 0);
+
+    std::memset(outMbs, 'x', sizeof(outMbs));
+    ptr = text;
+    Require(wcsrtombs_nid_postfix(outMbs, &ptr, 2, nullptr) == 2);
+    Require(ptr == text + 2 && std::memcmp(outMbs, "abxx", 4) == 0);
+
+    std::memset(outMbs, 'x', sizeof(outMbs));
+    ptr = text;
+    Require(wcsrtombs_nid_postfix(outMbs, &ptr, 0, nullptr) == 0);
+    Require(ptr == text && outMbs[0] == 'x');
+
+    ptr = wide;
+    errno = 0;
+    Require(wcsrtombs_nid_postfix(nullptr, &ptr, 0, nullptr) == Failed);
+    Require(ptr == wide && errno == 86);
+
+    std::memset(outMbs, 'x', sizeof(outMbs));
+    ptr = wide;
+    errno = 0;
+    Require(wcsrtombs_nid_postfix(outMbs, &ptr, 8, nullptr) == Failed);
+    Require(ptr == wide + 1 && errno == 86 && outMbs[0] == 'a');
+
+    const std::uint16_t* nullPtr = nullptr;
+    Require(wcsrtombs_nid_postfix(nullptr, &nullPtr, 0, nullptr) == 0);
+    Require(wcsrtombs_nid_postfix(nullptr, nullptr, 0, nullptr) == 0);
 }
